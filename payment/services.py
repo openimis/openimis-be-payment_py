@@ -1,5 +1,4 @@
 import logging
-from django.db.models import Q
 from gettext import gettext as _
 
 from contribution.models import Premium, PayTypeChoices
@@ -7,7 +6,6 @@ from core.models import Officer
 from django.db import connection
 from django.db.models import OuterRef, Sum, Q, Max
 from insuree.models import Insuree
-from location.apps import LocationConfig
 from location.models import LocationManager
 from payment.apps import PaymentConfig
 from payment.models import Payment, PaymentDetail
@@ -43,7 +41,7 @@ def detach_payment_detail(payment_detail):
         payment_detail.premium = None
         payment_detail.save()
         return []
-    except Exception as exc:
+    except Exception:
         return [{
             'title': payment_detail.uuid,
             'list': [{
@@ -170,14 +168,17 @@ def match_payment(payment_id=None, payment=None, audit_user_id=None):
     # Only update the policy status for self payer renew (stage R, no officer)
     # contribution without payment (Stage N status READY with officer)
     # PolicyID and phone number required in both cases
-    should_update_policy = any((
-                (pd.policy_stage == Policy.STAGE_RENEWED and pd.payment.officer_code is None)
-                or (pd.policy.status == Policy.STATUS_READY
-                    and pd.policy_stage == Policy.STAGE_NEW
-                    and pd.payment.officer_code is not None)
-                and pd.payment.phone_number is not None
-                and pd.policy is not None)
-            for pd in valid_pd)
+    should_update_policy = any(
+        (
+            (
+                pd.policy_stage == Policy.STAGE_RENEWED and pd.payment.officer_code is None
+            ) or (
+                pd.policy.status == Policy.STATUS_READY and
+                pd.policy_stage == Policy.STAGE_NEW and
+                pd.payment.officer_code is not None
+            ) and pd.payment.phone_number is not None and
+            pd.policy is not None
+        ) for pd in valid_pd)
 
     if should_update_policy:
         processed = {}
@@ -189,11 +190,13 @@ def match_payment(payment_id=None, payment=None, audit_user_id=None):
             transaction_no = pd.payment.transaction_no if pd.payment.transaction_no else None
 
             if (
-                    (pd.policy.status == Policy.STATUS_IDLE and pd.policy.stage == Policy.STAGE_RENEWED)
-                    and (pd.policy.status == Policy.STATUS_READY
-                         and PolicyConfig.activation_option == PolicyConfig.ACTIVATION_OPTION_READY
-                         and pd.policy_stage == Policy.STAGE_NEW)
-                    and pd.policy.id not in processed):
+                    (
+                        pd.policy.status == Policy.STATUS_IDLE and pd.policy.stage == Policy.STAGE_RENEWED
+                    ) and (
+                        pd.policy.status == Policy.STATUS_READY and
+                        PolicyConfig.activation_option == PolicyConfig.ACTIVATION_OPTION_READY and
+                        pd.policy_stage == Policy.STAGE_NEW
+                    ) and pd.policy.id not in processed):
                 if pd.premium.amount >= pd.policy.value:
                     new_policy.save_history()
                     new_policy.status = Policy.STATUS_ACTIVE
@@ -348,9 +351,8 @@ def validate_payment_detail(pd):
                     'detail': pd.id}]
         return errors
 
-    location_cursor = insuree.family.location
+    insuree.family.location
     family_locations = LocationManager().parents(insuree.family.location.id)
-
 
     # Original code checked the product validity against current_date, I used the enroll_date instead
     product = Product.filter_queryset().filter(
@@ -386,10 +388,10 @@ def validate_payment_detail(pd):
     # Check officer district vs product location
     # TODO this checks district/region, should be more generic
     if not (
-            officer.location is None
-            or product is None
-            or officer.location_id == product.location_id
-            or (officer.location.parent is not None and officer.location.parent == product.location.parent)):
+        officer.location is None or product is None or officer.location_id == product.location_id or (
+            officer.location.parent is not None and officer.location.parent == product.location.parent
+        )
+    ):
         errors += [{'code': PAYMENT_DETAIL_REJECTION_PRODUCT_LOCATION,
                     'message': _("payment.validation.detail.reject.product_location") % {
                         'id': pd.id,
@@ -417,4 +419,3 @@ def validate_payment_detail(pd):
     pd.latest_premium = latest_premium
     pd.product = product
     return errors
-

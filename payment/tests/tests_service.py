@@ -4,7 +4,7 @@ from django.db import connection
 from contribution.test_helpers import create_test_premium
 from core.test_helpers import create_test_officer
 from insuree.test_helpers import create_test_insuree
-from location.models import Location
+from location.test_helpers import create_test_location
 from medical.test_helpers import create_test_service
 from medical_pricelist.test_helpers import add_service_to_hf_pricelist
 from payment.services import legacy_match_payment, validate_payment_detail, PAYMENT_DETAIL_REJECTION_INSURANCE_NB, \
@@ -19,6 +19,14 @@ from product.test_helpers import create_test_product, create_test_product_servic
 
 # noinspection DuplicatedCode
 class PaymentServiceTestCase(TestCase):
+    region1 = None
+    region2 = None
+
+    def setUp(self):
+        super().setUp()
+        self.region1 = create_test_location('R', custom_props={'code': 'R1', 'name': 'TADA'})
+        self.region2 = create_test_location('R', custom_props={'code': 'R2', 'name': 'Tahida'})
+
     def test_call_to_legacy(self):
         # TODO: Add matching test and procedure for PostgreSQL
         if not connection.vendor == 'mssql':
@@ -39,7 +47,7 @@ class PaymentServiceTestCase(TestCase):
         )
 
         legacy_match_payment(payment.id, -1)
-        #errors = validate_payment_detail(payment_detail)
+        # errors = validate_payment_detail(payment_detail)
 
         payment_detail.refresh_from_db()
         policy.refresh_from_db()
@@ -144,7 +152,7 @@ class PaymentServiceTestCase(TestCase):
         insuree = create_test_insuree(custom_props={"chf_id": "paysimp"})
         product = create_test_product("ELI1")
         (policy, insuree_policy) = create_test_policy2(product, insuree, custom_props={
-            "value": 1000, "status": Policy.STATUS_IDLE})        
+            "value": 1000, "status": Policy.STATUS_IDLE})
         premium = create_test_premium(policy_id=policy.id, with_payer=False)
         payment, payment_detail = create_test_payment2(
             insuree_code="xxxxxx",
@@ -192,13 +200,10 @@ class PaymentServiceTestCase(TestCase):
         product.delete()
         officer.delete()
 
-    def test_validate_invalid_officer_location(self):
-        location_r1 = Location.filter_queryset().get(code="R1")
-        location_r2 = Location.filter_queryset().get(code="R2")
-        officer = create_test_officer(custom_props={"code": "TSTSIMP1", "location": location_r2})
+        officer = create_test_officer(custom_props={"code": "TSTSIMP1", "location": self.region1})
         insuree = create_test_insuree(custom_props={"chf_id": "paysimp"},
-                                      family_custom_props={"location": location_r1})  # Family in R1 !
-        product = create_test_product("ELI1", custom_props={"location": location_r1})  # Product in R2 !
+                                      family_custom_props={"location": self.region1})  # Family in R1 !
+        product = create_test_product("ELI1", custom_props={"location": insuree.family.location.parent.parent.parent})  # Product in R2 !
         (policy, insuree_policy) = create_test_policy2(
             product, insuree,
             custom_props={"value": 1000, "status": Policy.STATUS_IDLE})
@@ -217,19 +222,17 @@ class PaymentServiceTestCase(TestCase):
         payment_detail.delete()
         payment.delete()
         premium.delete()
-       
+
         policy.insuree_policies.all().delete()
         policy.delete()
         product.delete()
         officer.delete()
 
     def test_validate_invalid_product_location(self):
-        location_r1 = Location.filter_queryset().get(code="R1")
-        location_r2 = Location.filter_queryset().get(code="R2")
         officer = create_test_officer(custom_props={"code": "TSTSIMP1"})
         insuree = create_test_insuree(custom_props={"chf_id": "paysimp"},
-                                      family_custom_props={"location": location_r1})  # Family in R1 !
-        product = create_test_product("ELI1", custom_props={"location": location_r2})  # Product in R2 !
+                                      family_custom_props={"location": self.region1})  # Family in R1 !
+        product = create_test_product("ELI1", custom_props={"location": self.region2})  # Product in R2 !
         (policy, insuree_policy) = create_test_policy2(
             product, insuree,
             custom_props={"value": 1000, "status": Policy.STATUS_IDLE})
@@ -279,4 +282,3 @@ class PaymentServiceTestCase(TestCase):
         policy.delete()
         product.delete()
         officer.delete()
-

@@ -49,5 +49,4 @@ def create_test_payment2(insuree_code=None, product_code=None, officer_code=None
     else:
         payment_detail = None
 
-
     return payment, payment_detail
