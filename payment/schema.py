@@ -84,7 +84,7 @@ class Query(graphene.ObjectType):
         premiums = contribution_models.Premium.objects.values_list(
             'id').filter(Q(uuid__in=kwargs.get('premium_uuids')))
         detail_ids = PaymentDetail.objects.values_list('payment_id').filter(Q(premium_id__in=premiums),
-                                                                            *filter_validity(**kwargs)).distinct()
+                                                                            *PaymentDetail.filter_validity(**kwargs)).distinct()
         return Payment.objects.filter(Q(id__in=detail_ids))
 
 
