@@ -12,9 +12,9 @@ class Migration(migrations.Migration):
     operations = [
         migrations.RunSQL(
             """
-IF (EXISTS (SELECT * 
-         FROM INFORMATION_SCHEMA.TABLES 
-         WHERE TABLE_SCHEMA = SCHEMA_NAME() 
+IF (EXISTS (SELECT *
+         FROM INFORMATION_SCHEMA.TABLES
+         WHERE TABLE_SCHEMA = SCHEMA_NAME()
          AND  TABLE_NAME = 'contribution_PaymentMutation'))
 BEGIN
 exec sp_rename 'contribution_PaymentMutation', 'payment_PaymentMutation', 'OBJECT'
@@ -24,10 +24,9 @@ END
             """
 DO $$
 BEGIN
-    IF EXISTS (SELECT 1 FROM pg_tables WHERE tablename = 'contribution_PaymentMutation') THEN  
+    IF EXISTS (SELECT 1 FROM pg_tables WHERE tablename = 'contribution_PaymentMutation') THEN
         EXECUTE 'ALTER TABLE "contribution_PaymentMutation" RENAME TO "payment_PaymentMutation"';
     END IF;
-END$$;            
-            """
-                          )
+END$$;
+            """)
     ]

@@ -1,8 +1,6 @@
 from django.db.models import Q
 from django.core.exceptions import PermissionDenied
-from graphene_django.filter import DjangoFilterConnectionField
 import graphene_django_optimizer as gql_optimizer
-from payment.services import detach_payment_detail
 
 from .apps import PaymentConfig
 from django.utils.translation import gettext as _
@@ -11,8 +9,14 @@ from core.services import wait_for_mutation
 from contribution import models as contribution_models
 from .models import Payment, PaymentDetail
 # We do need all queries and mutations in the namespace here.
-from .gql_queries import *  # lgtm [py/polluting-import]
-from .gql_mutations import *  # lgtm [py/polluting-import]
+from .gql_queries import graphene, PaymentGQLType, PaymentDetailGQLType
+from .gql_mutations import (
+    CreatePaymentMutation,
+    UpdatePaymentMutation,
+    DeletePaymentsMutation,
+    on_policy_mutation,
+    on_payment_mutation,
+)
 from .signals import signal_before_payment_query, _read_signal_results
 
 
@@ -80,7 +84,7 @@ class Query(graphene.ObjectType):
         premiums = contribution_models.Premium.objects.values_list(
             'id').filter(Q(uuid__in=kwargs.get('premium_uuids')))
         detail_ids = PaymentDetail.objects.values_list('payment_id').filter(Q(premium_id__in=premiums),
-                                                                            *filter_validity(**kwargs)).distinct()
+                                                                            *PaymentDetail.filter_validity(**kwargs)).distinct()
         return Payment.objects.filter(Q(id__in=detail_ids))
 
 
@@ -91,10 +95,8 @@ class Mutation(graphene.ObjectType):
 
 
 def bind_signals():
-    signal_mutation_module_before_mutating["policy"].connect(
-        on_policy_mutation)
-    signal_mutation_module_before_mutating["payment"].connect(
-        on_payment_mutation)
+    signal_mutation_module_before_mutating["policy"].connect(on_policy_mutation)
+    signal_mutation_module_before_mutating["payment"].connect(on_payment_mutation)
 
 
 def _get_additional_filter(sender, additional_filter, user):

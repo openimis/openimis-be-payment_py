@@ -23,15 +23,13 @@ class Migration(migrations.Migration):
         """, reverse_sql=""),
         migrations.RunSQL(sql="""
             CREATE SEQUENCE IF NOT EXISTS tblpaymentdetails_paymentdetailsid_seq;
-            
+
             SELECT setval('tblpaymentdetails_paymentdetailsid_seq', COALESCE((SELECT MAX("PaymentDetailsID") FROM "tblPaymentDetails"), 0) + 1, false);
-            
+
             ALTER TABLE public."tblPaymentDetails"
             ALTER COLUMN "PaymentDetailsID" SET DEFAULT nextval('tblpaymentdetails_paymentdetailsid_seq');
-            
+
             ALTER SEQUENCE tblpaymentdetails_paymentdetailsid_seq OWNED BY public."tblPaymentDetails"."PaymentDetailsID";
         """, reverse_sql=""),
     ] if not settings.MSSQL else [
     ]
-
-

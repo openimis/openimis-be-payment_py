@@ -3,7 +3,7 @@ import uuid
 from core import fields
 from core import models as core_models
 from django.db import models
-from contribution.models import Premium, PayTypeChoices
+from contribution.models import Premium
 from django.utils.translation import gettext_lazy as _
 
 

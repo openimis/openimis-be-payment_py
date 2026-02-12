@@ -93,10 +93,9 @@ class UpdatePaymentMutation(OpenIMISMutation):
             return None
         except Exception as exc:
             return [{
-                'message': _("payment.mutation.failed_to_update_payment") %
-                           {'id': data.get('id') if data else None},
-                'detail': str(exc)}
-            ]
+                'message': _("payment.mutation.failed_to_update_payment") % {'id': data.get('id') if data else None},
+                'detail': str(exc)
+            }]
 
 
 class DeletePaymentsMutation(OpenIMISMutation):
