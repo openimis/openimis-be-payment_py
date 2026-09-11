@@ -26,6 +26,18 @@ class PaymentServiceTestCase(TestCase):
         super().setUp()
         self.region1 = create_test_location('R', custom_props={'code': 'R1', 'name': 'TADA'})
         self.region2 = create_test_location('R', custom_props={'code': 'R2', 'name': 'Tahida'})
+        self.district1 = create_test_location(
+            'D', custom_props={'code': 'R1D1', 'name': 'TADA D', 'parent': self.region1})
+        self.district2 = create_test_location(
+            'D', custom_props={'code': 'R2D1', 'name': 'Tahida D', 'parent': self.region2})
+        self.ward1 = create_test_location(
+            'W', custom_props={'code': 'R1D1W1', 'name': 'TADA w', 'parent': self.district1})
+        self.ward2 = create_test_location(
+            'W', custom_props={'code': 'R2D1W1', 'name': 'Tahida w', 'parent': self.district2})
+        self.village1 = create_test_location(
+            'V', custom_props={'code': 'R1D1W1v1', 'name': 'TADA v', 'parent': self.ward1})
+        self.village2 = create_test_location(
+            'V', custom_props={'code': 'R2D1W1V1', 'name': 'Tahida v', 'parent': self.ward2})
 
     def test_call_to_legacy(self):
         # TODO: Add matching test and procedure for PostgreSQL
@@ -200,10 +212,14 @@ class PaymentServiceTestCase(TestCase):
         product.delete()
         officer.delete()
 
-        officer = create_test_officer(custom_props={"code": "TSTSIMP1", "location": self.region1})
+        # The product has to be valid for the family's location chain, otherwise
+        # validation stops earlier on PRODUCT_NOT_ALLOWED. The officer is the one
+        # sitting in another region, which is what the product location check
+        # below is about.
         insuree = create_test_insuree(custom_props={"chf_id": "paysimp"},
-                                      family_custom_props={"location": self.region1})  # Family in R1 !
-        product = create_test_product("ELI1", custom_props={"location": insuree.family.location.parent.parent.parent})  # Product in R2 !
+                                      family_custom_props={"location": self.village1})  # Family in R1 !
+        officer = create_test_officer(custom_props={"code": "TSTSIMP1", "location": self.village2})  # Officer in R2 !
+        product = create_test_product("ELI1", custom_props={"location": self.region1})  # Product in R1
         (policy, insuree_policy) = create_test_policy2(
             product, insuree,
             custom_props={"value": 1000, "status": Policy.STATUS_IDLE})
