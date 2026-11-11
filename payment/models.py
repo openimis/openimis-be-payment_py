@@ -79,12 +79,40 @@ class Payment(core_models.VersionedModel):
         managed = True
         db_table = 'tblPayment'
 
+    @classmethod
+    def get_queryset(cls, queryset, user=None):
+        """Payments the user may see.
+
+        A payment has no location of its own and no single parent: it reaches
+        policies only through its details, each pointing (or not yet) at a
+        premium. So a payment is visible when one of its details is, or when
+        none of them is matched to a premium yet (an incoming payment awaiting
+        reconciliation, or a contract payment): there is nothing to scope those
+        by. A payment whose matched premiums are all out of reach is hidden.
+        """
+        if queryset is None:
+            queryset = cls.objects.all()
+        user = cls.scoping_user(user)
+        if user is None or getattr(user, "is_anonymous", True):
+            return queryset.none()
+        visible_details = PaymentDetail.get_queryset(PaymentDetail.objects.all(), user)
+        matched_details = PaymentDetail.objects.filter(premium__isnull=False)
+        return queryset.filter(
+            models.Q(id__in=visible_details.values("payment_id"))
+            | ~models.Q(id__in=matched_details.values("payment_id"))
+        )
+
     def __str__(self):
         return f"id:{self.id}, expected_amount: {self.expected_amount}, status:{self.status}, " \
                f"type:{self.type_of_payment}, uuid:{self.uuid}"
 
 
 class PaymentDetail(core_models.VersionedModel):
+    # A detail is as visible as the premium it settles, so through the premium's
+    # policy and family. A detail not matched to a premium yet has nothing to
+    # scope it by and stays visible, like a row with no location.
+    row_scope = core_models.ParentScope("premium", allow_null=True)
+
     id = models.BigAutoField(db_column='PaymentDetailsID', primary_key=True)
 
     payment = models.ForeignKey(
@@ -119,6 +147,14 @@ class PaymentDetail(core_models.VersionedModel):
     class Meta:
         managed = True
         db_table = 'tblPaymentDetails'
+
+    @classmethod
+    def get_queryset(cls, queryset, user=None):
+        # allow_null would otherwise leave unmatched details visible to anyone.
+        user = cls.scoping_user(user)
+        if user is None or getattr(user, "is_anonymous", True):
+            return (cls.objects.all() if queryset is None else queryset).none()
+        return super().get_queryset(queryset, user)
 
     def __str__(self):
         return f"id:{self.id}, payment:{self.payment_id}, ins_nb:{self.insurance_number}, amount:{self.amount}, " \

@@ -81,9 +81,12 @@ def update_or_create_payment(data, user):
     # data['audit_user_id'] = user.id_for_audit
     data.pop("rejected_reason", None)
     data['validity_from'] = now
+    # The payment to update is identified by its uuid, among the payments the
+    # user may see; a database id from the client would let it overwrite any row.
+    data.pop("id", None)
     payment_uuid = data.pop("uuid") if "uuid" in data else None
     if payment_uuid:
-        payment = Payment.objects.get(uuid=payment_uuid)
+        payment = Payment.get_queryset(Payment.objects.filter(uuid=payment_uuid), user).get()
         payment.save_history()
         reset_payment_before_update(payment)
         [setattr(payment, k, v) for k, v in data.items()]
@@ -94,7 +97,8 @@ def update_or_create_payment(data, user):
 
 
 def update_or_create_payment_detail(payment, premium_uuid, user):
-    premium = Premium.filter_queryset()\
+    # Only a premium the user may see can be matched to the payment.
+    premium = Premium.get_queryset(Premium.filter_queryset(), user)\
         .filter(uuid=premium_uuid)\
         .select_related("policy__family__head_insuree")\
         .select_related("policy__product")\
@@ -109,7 +113,9 @@ def update_or_create_payment_detail(payment, premium_uuid, user):
                 "policy__family__head_insuree__chf_id",
                 "policy__product__code")\
         .first()
-    payment_detail, _ = PaymentDetail.objects.update_or_create(
+    if premium is None:
+        raise Premium.DoesNotExist(_("Premium %s was not found.") % (premium_uuid,))
+    payment_detail, _created = PaymentDetail.objects.update_or_create(
         payment=payment, premium_id=premium["id"],
         defaults=dict(
             audit_user_id=user.id_for_audit,

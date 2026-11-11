@@ -1,6 +1,7 @@
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ValidationError, PermissionDenied
 from payment.apps import PaymentConfig
+from policy.apps import PolicyConfig
 from payment.models import Payment, PaymentMutation
 from policy import models as policy_models
 from payment.services import update_or_create_payment, detach_payment_detail, set_payment_deleted, \
@@ -114,9 +115,9 @@ class DeletePaymentsMutation(OpenIMISMutation):
             raise PermissionDenied(_("unauthorized"))
         errors = []
         for payment_uuid in data["uuids"]:
-            payment = Payment.objects \
-                .filter(uuid=payment_uuid) \
-                .first()
+            payment = Payment.get_queryset(
+                Payment.objects.filter(uuid=payment_uuid), user
+            ).first()
             if payment is None:
                 errors.append({
                     'title': payment_uuid,
@@ -131,10 +132,25 @@ class DeletePaymentsMutation(OpenIMISMutation):
 
 
 def on_policy_mutation(sender, **kwargs):
+    """Detach the payment details of the policies a DeletePoliciesMutation removes.
+
+    The signal runs before the mutation itself checks anything, so this handler
+    checks for itself: the caller must hold the policy delete right, and only
+    the policies they may see are touched.
+    """
     errors = []
     if kwargs.get("mutation_class") == 'DeletePoliciesMutation':
+        user = kwargs.get("user")
+        if (
+            user is None
+            or getattr(user, "is_anonymous", True)
+            or not user.has_perms(PolicyConfig.gql_mutation_delete_policies_perms)
+        ):
+            return errors
         uuids = kwargs['data'].get('uuids', [])
-        policies = policy_models.Policy.objects.prefetch_related("premiums__payment_details").filter(uuid__in=uuids).all()
+        policies = policy_models.Policy.get_queryset(
+            policy_models.Policy.objects.filter(uuid__in=uuids), user
+        ).prefetch_related("premiums__payment_details")
         for policy in policies:
             for premium in policy.premiums.all():
                 for payment_detail in premium.payment_details.all():
