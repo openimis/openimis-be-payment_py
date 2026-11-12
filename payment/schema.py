@@ -76,13 +76,16 @@ class Query(graphene.ObjectType):
     def resolve_payment_details(self, info, **kwargs):
         if not info.context.user.has_perms(PaymentConfig.gql_query_payments_perms):
             raise PermissionDenied(_("unauthorized"))
-        pass
+        # Row security is applied by PaymentDetailGQLType (ScopedQuerysetMixin).
+        return PaymentDetail.objects.filter(*filter_validity(**kwargs))
 
     def resolve_payments_by_premiums(self, info, **kwargs):
         if not info.context.user.has_perms(PaymentConfig.gql_query_payments_perms):
             raise PermissionDenied(_("unauthorized"))
-        premiums = contribution_models.Premium.objects.values_list(
-            'id').filter(Q(uuid__in=kwargs.get('premium_uuids')))
+        premiums = contribution_models.Premium.get_queryset(
+            contribution_models.Premium.objects.filter(uuid__in=kwargs.get('premium_uuids')),
+            info.context.user,
+        ).values_list('id')
         detail_ids = PaymentDetail.objects.values_list('payment_id').filter(Q(premium_id__in=premiums),
                                                                             *PaymentDetail.filter_validity(**kwargs)).distinct()
         return Payment.objects.filter(Q(id__in=detail_ids))
